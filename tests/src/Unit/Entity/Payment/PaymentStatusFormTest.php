@@ -7,6 +7,7 @@
 
 namespace Drupal\Tests\payment\Unit\Entity\Payment;
 
+use Drupal\Core\Config\TypedConfigManagerInterface;
 use Drupal\Core\DependencyInjection\ClassResolverInterface;
 use Drupal\Core\Form\FormState;
 use Drupal\Core\Form\FormStateInterface;
@@ -77,6 +78,13 @@ class PaymentStatusFormTest extends UnitTestCase {
   protected $pluginTypeManager;
 
   /**
+   * The typed config manager
+   *
+   * @var \Drupal\Core\Config\TypedConfigManagerInterface|\PHPUnit_Framework_MockObject_MockObject
+   */
+  protected $typedConfigManager;
+
+  /**
    * The string translator.
    *
    * @var \Drupal\Core\StringTranslation\TranslationInterface|\PHPUnit_Framework_MockObject_MockObject
@@ -114,12 +122,21 @@ class PaymentStatusFormTest extends UnitTestCase {
     $class_resolver = $this->getMock(ClassResolverInterface::class);
 
     $this->pluginTypeManager = $this->getmock(PluginTypeManagerInterface::class);
+
     $plugin_type_definition = [
       'id' => $this->randomMachineName(),
       'label' => $this->randomMachineName(),
       'provider' => $this->randomMachineName(),
     ];
-    $plugin_type = new PluginType($plugin_type_definition, $this->stringTranslation, $class_resolver, $this->paymentStatusManager);
+
+    $this->typedConfigManager = $this->getMock(TypedConfigManagerInterface::class);
+
+    $this->typedConfigManager->expects($this->once())
+      ->method('hasConfigSchema')
+      ->willReturn(true);
+
+    $plugin_type = new PluginType($plugin_type_definition, $this->stringTranslation, $class_resolver, $this->paymentStatusManager, $this->typedConfigManager);
+
     $this->pluginTypeManager->expects($this->any())
       ->method('getPluginType')
       ->with('payment_method')
