@@ -137,6 +137,7 @@ class PaymentLineItemsInput extends FormElement implements ContainerFactoryPlugi
     $line_items = static::getLineItems($element, $form_state);
 
     // Build the line items.
+    $line_items_prefix = implode('-', array_merge($element['#parents'], ['line_items']));
     $element['line_items'] = array(
       '#empty' => $this->t('There are no line items yet.'),
       '#header' => array(array(
@@ -153,9 +154,11 @@ class PaymentLineItemsInput extends FormElement implements ContainerFactoryPlugi
       )),
       '#type' => 'table',
       '#tree' => TRUE,
+      '#id' => Html::getUniqueId($line_items_prefix)
     );
 
     foreach ($line_items as $delta => $line_item) {
+
       $element['line_items'][$line_item->getName()] = array(
         '#attributes' => array(
           'class' => array(
@@ -165,6 +168,7 @@ class PaymentLineItemsInput extends FormElement implements ContainerFactoryPlugi
           ),
         ),
       );
+      $element['line_items'][$line_item->getName()]['#id'] = Html::getId(implode('-', [$line_items_prefix, $line_item->getName()]));
       $element['line_items'][$line_item->getName()]['name'] = array(
         '#markup' => $line_item->getName(),
       );
@@ -184,23 +188,25 @@ class PaymentLineItemsInput extends FormElement implements ContainerFactoryPlugi
       );
       $element['line_items'][$line_item->getName()]['delete'] = array(
         '#ajax' => array(
-          'callback' => array(get_class($this), 'ajaxDeleteSubmit'),
+          'callback' => [get_class($this), 'instantiate#ajaxDeleteSubmit#' . $plugin_id],
           'effect' => 'fade',
-          'event' => 'mousedown',
         ),
         '#limit_validation_errors' => [],
         '#submit' => array(array(get_class($this), 'deleteSubmit')),
         '#type' => 'submit',
         '#value' => $this->t('Delete'),
+        '#name' => Html::getId(implode('-', [$line_items_prefix, $line_item->getName(), 'delete']))
       );
     }
 
     // "Add more line items" button.
+    $add_more_prefix = implode('-', array_merge($element['#parents'], ['add_more']));
     $element['add_more'] = array(
       '#access' => $element['#cardinality'] == self::CARDINALITY_UNLIMITED || count($line_items) < $element['#cardinality'],
       '#attributes' => array(
         'class' => array('payment-add-more'),
       ),
+      '#id' => Html::getUniqueId($add_more_prefix),
       '#type' => 'container',
     );
     $options = [];
@@ -217,8 +223,6 @@ class PaymentLineItemsInput extends FormElement implements ContainerFactoryPlugi
       '#ajax' => array(
         'callback' => [get_class($this), 'instantiate#ajaxAddMoreSubmit#' . $plugin_id],
         'effect' => 'fade',
-        'event' => 'mousedown',
-        'wrapper' => $element['#id'],
       ),
       '#limit_validation_errors' => array(
         array_merge($element['#parents'], array('add_more', 'type')),
@@ -231,6 +235,7 @@ class PaymentLineItemsInput extends FormElement implements ContainerFactoryPlugi
         $element_plugin->addMoreSubmit($form, $form_state);
       }),
       '#type' => 'submit',
+      '#name' => str_replace('-', '_', $add_more_prefix . '_submit'),
       '#value' => $this->t('Add and configure a new line item'),
     );
 
@@ -285,7 +290,8 @@ class PaymentLineItemsInput extends FormElement implements ContainerFactoryPlugi
     $parents = array_slice($triggering_element['#array_parents'], 0, -2);
     $root_element = NestedArray::getValue($form, $parents);
     $response = new AjaxResponse();
-    $response->addCommand(new ReplaceCommand('#' . $root_element['#id'], $this->renderer->render($root_element)));
+    $selector = $this->getElementSelector($root_element['#id']);
+    $response->addCommand(new ReplaceCommand("[data-drupal-selector=\"{$selector}\"]", $this->renderer->render($root_element)));
 
     return $response;
   }
@@ -313,14 +319,12 @@ class PaymentLineItemsInput extends FormElement implements ContainerFactoryPlugi
   /**
    * Implements form AJAX callback.
    */
-  public static function ajaxDeleteSubmit(array &$form, FormStateInterface $form_state) {
-    $triggering_element = $form_state->getTriggeringElement();
-    $root_element_parents  = array_slice($triggering_element['#array_parents'], 0, -3);
-    $root_element = NestedArray::getValue($form, $root_element_parents);
-    $parents = $triggering_element['#array_parents'];
-    $line_item_name = $parents[count($parents) - 2];
+  public function ajaxDeleteSubmit(array &$form, FormStateInterface $form_state) {
+    $parents = $form_state->getTriggeringElement()['#array_parents'];
+    $widget = NestedArray::getValue($form, array_splice($parents, 0, -3));
+    $selector = $this->getElementSelector($widget['#id']);
     $response = new AjaxResponse();
-    $response->addCommand(new RemoveCommand('#' . $root_element['#id'] . ' .payment-line-item-name-' . $line_item_name));
+    $response->addCommand(new ReplaceCommand("[data-drupal-selector=\"{$selector}\"]", $this->renderer->render($widget)));
 
     return $response;
   }
@@ -405,6 +409,24 @@ class PaymentLineItemsInput extends FormElement implements ContainerFactoryPlugi
     return $form_state->get($key);
   }
 
+
+  /**
+   * Gets de data-drupal-selector based on id
+   *
+   * @param string $id
+   *   The id of the element
+   *
+   * @return mixed
+   */
+  private function getElementSelector($id)
+  {
+    if ($length = strpos($id, '--')) {
+      $id = substr($id, 0, $length);
+    }
+
+    return Html::getId($id);
+  }
+
   /**
    * Initializes stored line items.
    *
@@ -425,5 +447,7 @@ class PaymentLineItemsInput extends FormElement implements ContainerFactoryPlugi
   public static function valueCallback(&$element, $input, FormStateInterface $form_state) {
     return static::getLineItems($element, $form_state);
   }
+
+
 
 }
