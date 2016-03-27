@@ -139,7 +139,7 @@ class PaymentStatusFormTest extends UnitTestCase {
 
     $this->pluginTypeManager->expects($this->any())
       ->method('getPluginType')
-      ->with('payment_method')
+      ->with('payment_status')
       ->willReturn($plugin_type);
 
     $this->urlGenerator = $this->getmock(UrlGeneratorInterface::class);
